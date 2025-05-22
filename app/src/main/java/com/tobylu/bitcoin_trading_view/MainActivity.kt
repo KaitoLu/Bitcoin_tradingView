@@ -39,11 +39,17 @@ class MainActivity : ComponentActivity() {
         // 開始 WebSocket 連線
         btcWebSocketManager.connect()
 
+        // 收集載入狀態
+        lifecycleScope.launch {
+            btcWebSocketManager.loadingStatus.collectLatest { status ->
+                updateStatus(status)
+            }
+        }
+
         // 收集價格並更新 UI
         lifecycleScope.launch {
             btcWebSocketManager.btcPrice.collectLatest { price ->
                 binding.priceTextView.text = price
-                updateStatus("即時價格已更新")
             }
         }
 
@@ -53,7 +59,6 @@ class MainActivity : ComponentActivity() {
                 try {
                     if (klineList.isNotEmpty()) {
                         updateCandleChart(klineList)
-                        updateStatus("K線數據: ${klineList.size} 根")
                     }
                 } catch (e: Exception) {
                     println("處理 K 線數據錯誤: ${e.message}")
@@ -81,8 +86,20 @@ class MainActivity : ComponentActivity() {
         xAxis.setDrawGridLines(true)
         xAxis.gridColor = Color.GRAY
         xAxis.textColor = Color.WHITE
-        xAxis.granularity = 1f  // 設置 X 軸間距
-        xAxis.setLabelCount(6, false)  // 最多顯示 6 個標籤
+        xAxis.granularity = 5f  // 每5根K線顯示一個標籤
+        xAxis.setLabelCount(6, false)  // 最多顯示 6 個時間標籤
+        xAxis.valueFormatter = object : ValueFormatter() {
+            private val dateFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+            override fun getFormattedValue(value: Float): String {
+                val index = value.toInt()
+                // 只在5的倍數位置顯示時間標籤
+                return if (index >= 0 && index < klineDataForDisplay.size && index % 5 == 0) {
+                    dateFormat.format(Date(klineDataForDisplay[index].openTime))
+                } else {
+                    ""
+                }
+            }
+        }
 
         // Y軸設置
         val yAxisLeft = candleChart.axisLeft
